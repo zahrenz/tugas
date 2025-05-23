@@ -1,31 +1,56 @@
-import fs from 'fs';
-import path from 'path';
-import formidable from 'formidable';
+// pages/api/upload.js
+import formidable from "formidable";
+import fs from "fs";
+import fetch from "node-fetch";
 
 export const config = {
   api: {
-    bodyParser: false, // Disable default body parser to handle raw form data
+    bodyParser: false, // kita disable body parser agar formidable bisa parse multipart/form-data
   },
 };
 
-export default function handler(req, res) {
-  if (req.method === 'POST') {
-    const form = new formidable.IncomingForm();
-    form.uploadDir = path.join(process.cwd(), 'public', 'uploads'); // Directory to save uploaded files
-    form.keepExtensions = true; // Keep file extensions
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ message: "Method Not Allowed" });
+  }
 
-    form.parse(req, (err, fields, files) => {
-      if (err) {
-        return res.status(500).json({ message: "Failed to upload image." });
+  const form = new formidable.IncomingForm();
+
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Error parsing form data" });
+    }
+
+    // files.file adalah file yang diupload
+    const file = files.file;
+
+    try {
+      // Baca file buffer
+      const fileData = fs.createReadStream(file.filepath);
+
+      // Kita buat FormData untuk diteruskan ke backend Adonis.js
+      const formData = new FormData();
+      formData.append("file", fileData, file.originalFilename);
+
+      // Kirim ke backend
+      const response = await fetch("http://localhost:3333/api/upload", {
+        method: "POST",
+        body: formData,
+        // Jangan set header 'Content-Type', biar FormData yang handle
+      });
+
+      if (!response.ok) {
+        const errorRes = await response.json();
+        return res.status(response.status).json({ message: errorRes.message || "Upload failed" });
       }
 
-      const file = files.image[0];
-      const filePath = `/uploads/${file.newFilename}`;
+      const result = await response.json();
 
-      // Send back the path to the saved file
-      res.status(200).json({ filePath });
-    });
-  } else {
-    res.status(405).json({ message: 'Method Not Allowed' });
-  }
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Upload error" });
+    }
+  });
 }

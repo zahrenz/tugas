@@ -1,21 +1,27 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import styles from "./Booklist.module.css";
+import { getBooks, deleteBook } from "../../../lib/api/books";
+
+const GENRES = ["All", "Fiction", "Non-Fiction", "Biography", "Fantasy", "Science"];
 
 export default function Booklist() {
   const [books, setBooks] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [bookToDelete, setBookToDelete] = useState(null);
-  const [descriptionModal, setDescriptionModal] = useState({ show: false, content: "" });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedGenre, setSelectedGenre] = useState("All");
 
   const fetchBooks = async () => {
     try {
-      const res = await fetch("/api/books");
-      const data = await res.json();
+      const data = await getBooks();
       setBooks(data);
     } catch (err) {
-      console.error("Gagal memuat data buku:", err);
-      alert("Gagal memuat data buku.");
+      setError("Gagal mengambil data buku.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -23,113 +29,131 @@ export default function Booklist() {
     fetchBooks();
   }, []);
 
-  const confirmDelete = (bookId) => {
-    setBookToDelete(bookId);
-    setShowModal(true);
-  };
+  const handleDelete = async (id) => {
+    const confirmed = confirm("Yakin ingin menghapus buku ini?");
+    if (!confirmed) return;
 
-  const handleDeleteConfirmed = async () => {
-    if (!bookToDelete) return;
-
-    const res = await fetch(`/api/books/${bookToDelete}`, {
-      method: "DELETE",
-    });
-
-    const result = await res.json();
-    if (res.ok) {
-      setBooks((prevBooks) => prevBooks.filter((book) => book.id !== bookToDelete));
-    } else {
-      alert(`Gagal menghapus buku: ${result.message}`);
+    try {
+      await deleteBook(id);
+      await fetchBooks();
+    } catch (err) {
+      alert("Gagal menghapus buku.");
     }
-
-    setShowModal(false);
-    setBookToDelete(null);
   };
+
+  const openModal = (desc) => {
+    setModalContent(desc);
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setModalContent("");
+  };
+
+  const filteredBooks = books.filter((book) => {
+    const matchesGenre = selectedGenre === "All" || book.category === selectedGenre;
+    const matchesSearch = (book.title + book.author)
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    return matchesGenre && matchesSearch;
+  });
+
+  if (loading) return <p className={styles.loading}>Memuat data buku...</p>;
+  if (error) return <p className={styles.error}>{error}</p>;
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.title}>Book List</h1>
+      <h1 className={styles.title}>Daftar Buku</h1>
 
-      <Link href="/books/add" className={styles.addLink}>
-        + Add New Book
-      </Link>
+      <div className={styles.actionsWrapper}>
+        <Link href="/books/add" legacyBehavior>
+          <a className={styles.addButton}>+ Tambah Buku</a>
+        </Link>
+      </div>
 
-      {books.length === 0 ? (
-        <p>No book has been added yet.</p>
-      ) : (
-        <div className={styles.cardGrid}>
-          {books.map((b) => (
-            <div key={b.id} className={styles.card}>
-              <div className={styles.imageWrapper}>
-                {b.image ? (
-                  <img
-                    src={`/uploads/${b.image}`}
-                    alt={b.title}
-                    className={styles.coverImage}
-                  />
-                ) : (
-                  <span>(No picture)</span>
-                )}
-              </div>
-              <div className={styles.info}>
-                <p><span className={styles.label}>Title:</span> {b.title || "-"}</p>
-                <p><span className={styles.label}>Author:</span> {b.author || "-"}</p>
-                <p><span className={styles.label}>Genre:</span> {b.genre || "-"}</p>
-                <p>
-                  <span className={styles.label}>Description:</span>{" "}
-                  <span
-                    className={styles.descriptionText}
-                    onClick={() => {
-                      if (b.description) {
-                        setDescriptionModal({ show: true, content: b.description });
-                      }
-                    }}
-                  >
-                    {b.description?.length > 60
-                      ? b.description.slice(0, 60) + "..."
-                      : b.description || "-"}
-                  </span>
-                </p>
-              </div>
-              <div className={styles.actions}>
-                <Link href={`/books/edit/${b.id}`}>Edit</Link>
-                <button onClick={() => confirmDelete(b.id)}>Delete</button>
-              </div>
-            </div>
+      <div className={styles.controlsWrapper} style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+        <input
+          type="text"
+          placeholder="Cari judul atau penulis..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className={styles.searchInput}
+        />
+        <select
+          value={selectedGenre}
+          onChange={(e) => setSelectedGenre(e.target.value)}
+          className={styles.sortSelect}
+        >
+          {GENRES.map((genre) => (
+            <option key={genre} value={genre}>
+              {genre === "All" ? "Semua Genre" : genre}
+            </option>
           ))}
-        </div>
+        </select>
+      </div>
+
+      {filteredBooks.length === 0 ? (
+        <p className={styles.empty}>Tidak ada buku yang cocok.</p>
+      ) : (
+        <ul className={styles.bookList}>
+          {filteredBooks.map((book) => {
+            const shortDesc = book.description?.slice(0, 100);
+            const isLongDesc = book.description && book.description.length > 100;
+
+            return (
+              <li key={book.id} className={styles.bookItem}>
+                <div className={styles.bookInfo}>
+                  <div><strong>Judul:</strong> {book.title}</div>
+                  <div><strong>Penulis:</strong> {book.author}</div>
+                  <div><strong>Genre:</strong> {book.category || "-"}</div>
+                  <div>
+                    <strong>Deskripsi:</strong>{" "}
+                    {isLongDesc ? (
+                      <>
+                        {shortDesc}...{" "}
+                        <button
+                          className={styles.readMoreButton}
+                          onClick={() => openModal(book.description)}
+                          type="button"
+                        >
+                          Lihat Selengkapnya
+                        </button>
+                      </>
+                    ) : (
+                      book.description || "-"
+                    )}
+                  </div>
+                </div>
+                <div className={styles.actions}>
+                  <Link href={`/books/${book.id}/edit`} legacyBehavior>
+                    <a className={styles.editButton}>Edit</a>
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(book.id)}
+                    className={styles.deleteButton}
+                    type="button"
+                  >
+                    Hapus
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      {/* Modal Konfirmasi Hapus */}
-      {showModal && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modal}>
-            <p>Are you sure you want to delete this book?</p>
-            <div className={styles.modalButtons}>
-              <button onClick={handleDeleteConfirmed} className={styles.deleteBtn}>Yes, Delete</button>
-              <button onClick={() => setShowModal(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Deskripsi */}
-      {descriptionModal.show && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modal}>
-            <h3>Description</h3>
-            <p style={{ textAlign: "left", whiteSpace: "pre-wrap" }}>
-              {descriptionModal.content}
-            </p>
-            <div className={styles.modalButtons}>
+      {modalOpen && (
+        <div className={styles.modalOverlay} onClick={closeModal}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <button
-  className={styles.closeBtn}
-  onClick={() => setDescriptionModal({ show: false, content: "" })}
->
-Close
-</button>
-
-            </div>
+              className={styles.modalCloseButton}
+              onClick={closeModal}
+              aria-label="Tutup modal"
+            >
+              &times;
+            </button>
+            <p>{modalContent}</p>
           </div>
         </div>
       )}

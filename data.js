@@ -238,6 +238,22 @@ let books = [
     "description": [
       "Verity bercerita tentang Lowen Ashleigh, seorang penulis yang diundang untuk menyelesaikan seri buku yang ditinggalkan oleh Verity Crawford, seorang penulis terkenal yang terbaring koma setelah kecelakaan. Ketika Lowen mulai membaca naskah pribadi Verity, ia menemukan kebenaran gelap tentang kehidupan Verity yang berpotensi mengubah segala hal. Semakin terlibat, Lowen mulai ragu antara melaporkan apa yang ia temukan atau menjaga rahasia yang dapat merusak kehidupan banyak orang."
     ]
+  },
+  {
+    "id": 1747837246213,
+    "title": [
+      "halo"
+    ],
+    "author": [
+      "gua"
+    ],
+    "genre": [
+      "Non-fiction"
+    ],
+    "description": [
+      "p"
+    ],
+    "image": "c980w2uuotk4xiklobiv6hxof.jpg"
   }
 ];
 module.exports = { books };
